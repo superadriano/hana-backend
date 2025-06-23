@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
+const { initDatabase, cleanupExpiredTokens } = require('./db');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const personCardRoutes = require('./routes/personCards');
@@ -67,7 +68,38 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Hana Backend running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-}); 
+
+// Initialize database and start server
+async function startServer() {
+  try {
+    // Initialize database
+    await initDatabase();
+    console.log('Database initialized successfully');
+
+    // Start server
+    app.listen(PORT, () => {
+      console.log(`Hana Backend running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+
+    // Set up cleanup task for expired tokens (run every hour)
+    setInterval(async () => {
+      try {
+        await cleanupExpiredTokens();
+        console.log('Cleaned up expired tokens and sessions');
+      } catch (error) {
+        console.error('Cleanup task error:', error);
+      }
+    }, 60 * 60 * 1000); // 1 hour
+
+    // Run initial cleanup
+    await cleanupExpiredTokens();
+    console.log('Initial cleanup completed');
+
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer(); 

@@ -1,109 +1,223 @@
 # Hana Backend API
 
-This is the backend API for the Hana iOS app, providing authentication, user management, and person card functionality.
+A robust backend API for the Hana iOS app with real authentication, SMS verification, and user management.
 
-## Quick Deploy to Railway
+## Features
 
-### 1. Deploy to Railway (Recommended)
+- ✅ **Real Authentication System**
+  - JWT-based access tokens
+  - Refresh token rotation
+  - Session management
+  - Secure token storage
 
-1. **Fork/Clone this repository**
-2. **Go to [railway.app](https://railway.app)**
-3. **Sign up with GitHub**
-4. **Create new project → Deploy from GitHub repo**
-5. **Add PostgreSQL database:**
-   - Go to your project
-   - Click "New" → "Database" → "PostgreSQL"
-   - Railway will automatically set `DATABASE_URL` environment variable
+- ✅ **SMS Verification**
+  - Twilio integration for real SMS
+  - Rate limiting for verification codes
+  - Code expiration and cleanup
 
-### 2. Set Environment Variables
+- ✅ **User Management**
+  - User registration and login
+  - Profile management
+  - Onboarding status tracking
 
-In Railway dashboard, add these environment variables:
+- ✅ **Security Features**
+  - Rate limiting
+  - CORS protection
+  - Helmet security headers
+  - Token revocation
 
-```bash
-# Required
-DATABASE_URL=postgresql://... (auto-set by Railway)
-JWT_SECRET=your-super-secret-jwt-key-here
-NODE_ENV=production
+## Setup Instructions
 
-# Optional (for SMS)
+### 1. Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```env
+# Database Configuration
+DATABASE_URL=postgresql://username:password@localhost:5432/hana_db
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+JWT_EXPIRES_IN=1h
+REFRESH_TOKEN_EXPIRES_IN=7d
+
+# Twilio SMS Configuration (Optional for development)
 TWILIO_ACCOUNT_SID=your_twilio_account_sid
 TWILIO_AUTH_TOKEN=your_twilio_auth_token
 TWILIO_PHONE_NUMBER=+1234567890
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# Security
+CORS_ORIGIN=https://your-frontend-domain.com
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Verification Code Settings
+VERIFICATION_CODE_EXPIRES_IN=600000
+MAX_VERIFICATION_ATTEMPTS=5
 ```
 
-### 3. Initialize Database
+### 2. Database Setup
 
-After deployment, the database tables will be created automatically on first run.
+The app will automatically create the required tables on startup. Make sure your PostgreSQL database is running and accessible.
 
-## Local Development
+### 3. Install Dependencies
 
-### 1. Install Dependencies
 ```bash
 npm install
 ```
 
-### 2. Set up Environment
-Create `.env` file:
-```bash
-DATABASE_URL=postgresql://username:password@localhost:5432/hana_db
-JWT_SECRET=your-secret-key
-NODE_ENV=development
-```
+### 4. Start the Server
 
-### 3. Run Development Server
 ```bash
+# Development
 npm run dev
+
+# Production
+npm start
 ```
 
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/send-code` - Send SMS verification code
-- `POST /api/auth/verify-code` - Verify SMS code
+
+- `POST /api/auth/send-code` - Send verification code
+- `POST /api/auth/verify-code` - Verify code and login
 - `POST /api/auth/refresh` - Refresh access token
+- `POST /api/auth/logout` - Logout (revoke token)
+- `GET /api/auth/me` - Get current user info
+- `PUT /api/auth/profile` - Update user profile
 
 ### Users
-- `POST /api/users/profile` - Create user profile
-- `GET /api/users/profile` - Get user profile
-- `PUT /api/users/profile` - Update user profile
+
+- `GET /api/users/:id` - Get user by ID
+- `PUT /api/users/:id` - Update user
 
 ### Person Cards
-- `POST /api/person-cards` - Create person card
+
 - `GET /api/person-cards` - Get user's person cards
+- `POST /api/person-cards` - Create new person card
 - `PUT /api/person-cards/:id` - Update person card
 - `DELETE /api/person-cards/:id` - Delete person card
-- `POST /api/person-cards/:id/discoverable` - Toggle discoverability
 
-## Testing
+## Authentication Flow
 
-Test the API with curl:
-
-```bash
-# Health check
-curl https://your-railway-app.railway.app/health
-
-# Send verification code
-curl -X POST https://your-railway-app.railway.app/api/auth/send-code \
-  -H "Content-Type: application/json" \
-  -d '{"phoneNumber": "+1234567890", "platform": "ios"}'
-```
+1. **Send Code**: User enters phone number → receives SMS with 6-digit code
+2. **Verify Code**: User enters code → receives JWT access token + refresh token
+3. **API Calls**: Include `Authorization: Bearer <access_token>` header
+4. **Token Refresh**: When access token expires, use refresh token to get new tokens
+5. **Logout**: Revoke refresh token to invalidate session
 
 ## SMS Configuration
 
-For real SMS delivery, set up Twilio:
+### Development Mode
+- Without Twilio: Codes are logged to console
+- With Twilio: Real SMS sent to phone numbers
 
-1. **Sign up at [twilio.com](https://twilio.com)**
-2. **Get Account SID and Auth Token**
-3. **Buy a phone number**
-4. **Set environment variables in Railway**
+### Production Mode
+- Requires Twilio account and configuration
+- Real SMS sent to verified phone numbers
 
-For development/testing, SMS codes are logged to console.
+## Security Features
 
-## Production Checklist
+- **Rate Limiting**: Prevents abuse of verification endpoints
+- **Token Rotation**: Refresh tokens are rotated on each use
+- **Session Management**: Tracks active sessions and IP addresses
+- **Automatic Cleanup**: Expired tokens and sessions are cleaned up hourly
+- **CORS Protection**: Configurable origin restrictions
 
-- [ ] Deploy to Railway/Heroku
-- [ ] Set up PostgreSQL database
-- [ ] Configure environment variables
-- [ ] Set up Twilio for SMS (optional)
-- [ ] Test all endpoints
-- [ ] Update iOS app with production API URL 
+## Database Schema
+
+### Users Table
+- `id` (UUID) - Primary key
+- `phone_number` (VARCHAR) - Unique phone number
+- `full_name` (VARCHAR) - User's full name
+- `hair_color` (VARCHAR) - User's hair color
+- `is_onboarded` (BOOLEAN) - Onboarding completion status
+
+### Verification Codes Table
+- `id` (UUID) - Primary key
+- `phone_number` (VARCHAR) - Phone number
+- `code` (VARCHAR) - 6-digit verification code
+- `expires_at` (TIMESTAMP) - Expiration time
+- `used` (BOOLEAN) - Whether code has been used
+
+### Refresh Tokens Table
+- `id` (UUID) - Primary key
+- `user_id` (UUID) - Foreign key to users
+- `token` (VARCHAR) - Refresh token value
+- `expires_at` (TIMESTAMP) - Expiration time
+- `is_revoked` (BOOLEAN) - Whether token is revoked
+
+### User Sessions Table
+- `id` (UUID) - Primary key
+- `user_id` (UUID) - Foreign key to users
+- `access_token_hash` (VARCHAR) - Hashed access token
+- `expires_at` (TIMESTAMP) - Expiration time
+- `device_info` (TEXT) - Device information
+- `ip_address` (VARCHAR) - IP address
+
+## Deployment
+
+### Railway (Recommended)
+1. Connect your GitHub repository to Railway
+2. Set environment variables in Railway dashboard
+3. Deploy automatically on push to main branch
+
+### Other Platforms
+- **Heroku**: Add PostgreSQL addon and set environment variables
+- **DigitalOcean**: Use App Platform with PostgreSQL database
+- **AWS**: Use RDS for PostgreSQL and deploy to EC2 or ECS
+
+## Development
+
+### Running Tests
+```bash
+npm test
+```
+
+### Database Migrations
+The app automatically creates tables on startup. For production, consider using a migration tool like `node-pg-migrate`.
+
+### Local Development
+1. Install PostgreSQL locally
+2. Create database: `createdb hana_db`
+3. Set `DATABASE_URL` in `.env`
+4. Run `npm run dev`
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Error**
+   - Check `DATABASE_URL` format
+   - Ensure PostgreSQL is running
+   - Verify database exists
+
+2. **SMS Not Sending**
+   - Check Twilio credentials
+   - Verify phone number format
+   - Check Twilio account balance
+
+3. **JWT Token Issues**
+   - Verify `JWT_SECRET` is set
+   - Check token expiration times
+   - Ensure proper Authorization header format
+
+### Logs
+- Check console output for detailed error messages
+- Database queries are logged in development mode
+- SMS delivery status is logged
+
+## Support
+
+For issues and questions:
+1. Check the logs for error messages
+2. Verify environment variables are set correctly
+3. Test database connectivity
+4. Check Twilio account status (if using SMS) 
